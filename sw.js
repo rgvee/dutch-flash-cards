@@ -1,9 +1,10 @@
-const CACHE_NAME = "dutch-fc-v2";
+const CACHE_NAME = "dutch-fc-v4";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
+  "./scheduler.js",
   "./data.js",
   "./manifest.json",
   "./icons/icon-192.png",

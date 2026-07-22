@@ -1,224 +1,166 @@
-/* Dutch flashcard trainer — dedupe, Leitner-style scheduling, learn-then-quiz flow */
+/* Dutch flashcard trainer — DOM, persistence, and render loop. Scheduling logic lives in scheduler.js. */
 (function () {
   "use strict";
 
-  const STORAGE_KEY = "dutch-fc-progress-v2";
-  const SETTINGS_KEY = "dutch-fc-settings-v1";
+  const PROFILES = ["Ram", "Rudrakshi"];
+  const MASTER_BOX = Scheduler.MASTER_BOX;
 
-  const LEARNING_STEPS_MIN = [5, 15]; // minutes; graduate to review after passing all steps
-  const REVIEW_INTERVALS_HOURS = [4, 12, 24, 48, 96, 168]; // box 0..5
-  const MASTER_BOX = 4; // box index at which a card counts as "mastered"
+  const CARDS = Scheduler.buildCards(RAW_CARDS);
 
-  // ---------- Build deduped card list ----------
-  function normalizeKey(nl) {
-    return nl.trim().toLowerCase();
+  // ---------- Per-profile persistence ----------
+  function progressKey(profile) {
+    return `dutch-fc-progress-v2:${profile}`;
+  }
+  function settingsKey(profile) {
+    return `dutch-fc-settings-v1:${profile}`;
   }
 
-  function buildCards(raw) {
-    const seen = new Map();
-    raw.forEach(([nl, en, sNl, sEn, deck]) => {
-      const key = normalizeKey(nl);
-      if (seen.has(key)) {
-        seen.get(key).decks.add(deck);
-      } else {
-        seen.set(key, { nl, en, sNl, sEn, decks: new Set([deck]) });
-      }
-    });
-    let id = 0;
-    return Array.from(seen.values()).map((c) => ({
-      id: id++,
-      nl: c.nl,
-      en: c.en,
-      sNl: c.sNl,
-      sEn: c.sEn,
-      decks: Array.from(c.decks).sort(),
-    }));
-  }
-
-  const CARDS = buildCards(RAW_CARDS);
-  const CARDS_BY_ID = new Map(CARDS.map((c) => [c.id, c]));
-
-  // ---------- Progress persistence ----------
-  function freshProgress(id) {
-    return {
-      id,
-      state: "new", // new | learning | review
-      box: 0,
-      step: 0,
-      dueAt: 0,
-      seen: 0,
-      correct: 0,
-      wrong: 0,
-    };
-  }
-
-  function loadProgress() {
+  function loadProgress(profile) {
     let stored = {};
     try {
-      stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      stored = JSON.parse(localStorage.getItem(progressKey(profile)) || "{}");
     } catch (e) {
       stored = {};
     }
     const progress = {};
     CARDS.forEach((c) => {
-      progress[c.id] = stored[c.id] ? Object.assign(freshProgress(c.id), stored[c.id]) : freshProgress(c.id);
+      progress[c.id] = stored[c.id] ? Object.assign(Scheduler.freshProgress(c.id), stored[c.id]) : Scheduler.freshProgress(c.id);
     });
     return progress;
   }
 
   function saveProgress() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.progress));
+    localStorage.setItem(progressKey(state.profile), JSON.stringify(state.progress));
   }
 
-  function loadSettings() {
+  function loadSettings(profile) {
     let s = {};
     try {
-      s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+      s = JSON.parse(localStorage.getItem(settingsKey(profile)) || "{}");
     } catch (e) {
       s = {};
     }
-    return Object.assign({ newPerSession: 20, deckFilter: "all" }, s);
+    return Object.assign({ newPerSession: 20 }, s);
   }
 
   function saveSettings() {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+    localStorage.setItem(settingsKey(state.profile), JSON.stringify(state.settings));
   }
 
   const state = {
-    progress: loadProgress(),
-    settings: loadSettings(),
+    profile: null,
+    progress: null,
+    settings: null,
     queue: [],
     current: null,
     revealed: false,
-    screen: "home",
+    optionsChoices: null,
+    answeredOption: null,
+    screen: "picker",
+    newIntroducedThisSession: 0,
+    sessionStats: { correct: 0, wrong: 0, graduated: 0 },
   };
 
-  // ---------- Scheduling ----------
-  function minutesFromNow(min) {
-    return Date.now() + min * 60 * 1000;
+  function selectProfile(name) {
+    state.profile = name;
+    state.progress = loadProgress(name);
+    state.settings = loadSettings(name);
+    state.screen = "home";
+    render();
   }
-  function hoursFromNow(h) {
-    return Date.now() + h * 60 * 60 * 1000;
+
+  // Minimum number of other cards shown before a just-answered card, still on
+  // the pre-review ladder, is allowed to reappear. Without this, a card can
+  // land right back at the front of the queue the instant it becomes due
+  // again (it's always due while on the ladder), showing its Options and
+  // Learning rounds back-to-back with nothing in between.
+  const REQUEUE_GAP = 5;
+
+  function requeueCard(card) {
+    const pos = Math.min(REQUEUE_GAP, state.queue.length);
+    state.queue.splice(pos, 0, card);
   }
 
   function introduceCard(cardId) {
-    const p = state.progress[cardId];
-    p.state = "learning";
-    p.step = 0;
-    p.dueAt = minutesFromNow(LEARNING_STEPS_MIN[0]);
+    state.progress[cardId] = Scheduler.introduceCard(state.progress[cardId]);
+    state.newIntroducedThisSession += 1;
     saveProgress();
+    requeueCard(CARDS[cardId]);
   }
 
   function gradeCard(cardId, grade) {
-    // grade: 'again' | 'good' | 'easy'
-    const p = state.progress[cardId];
-    p.seen += 1;
-
-    if (p.state === "learning" || p.state === "new") {
-      if (p.state === "new") p.state = "learning";
-      if (grade === "again") {
-        p.wrong += 1;
-        p.step = 0;
-        p.dueAt = minutesFromNow(LEARNING_STEPS_MIN[0]);
-      } else {
-        p.correct += 1;
-        const bonus = grade === "easy" ? 1 : 0;
-        p.step += 1 + bonus;
-        if (p.step >= LEARNING_STEPS_MIN.length) {
-          p.state = "review";
-          p.box = grade === "easy" ? 1 : 0;
-          p.dueAt = hoursFromNow(REVIEW_INTERVALS_HOURS[p.box]);
-        } else {
-          p.dueAt = minutesFromNow(LEARNING_STEPS_MIN[p.step]);
-        }
-      }
-    } else {
-      // review
-      if (grade === "again") {
-        p.wrong += 1;
-        p.state = "learning";
-        p.box = 0;
-        p.step = 0;
-        p.dueAt = minutesFromNow(LEARNING_STEPS_MIN[0]);
-      } else {
-        p.correct += 1;
-        const bump = grade === "easy" ? 2 : 1;
-        p.box = Math.min(p.box + bump, REVIEW_INTERVALS_HOURS.length - 1);
-        p.dueAt = hoursFromNow(REVIEW_INTERVALS_HOURS[p.box]);
-      }
-    }
+    const before = state.progress[cardId];
+    const wasLearning = before.state === "learning";
+    const after = Scheduler.gradeCard(before, grade, Date.now());
+    state.progress[cardId] = after;
+    if (grade === "right") state.sessionStats.correct += 1;
+    else state.sessionStats.wrong += 1;
+    if (wasLearning && after.state === "review") state.sessionStats.graduated += 1;
     saveProgress();
-  }
-
-  function cardsForDeckFilter() {
-    if (state.settings.deckFilter === "all") return CARDS;
-    const d = Number(state.settings.deckFilter);
-    return CARDS.filter((c) => c.decks.includes(d));
+    if (after.state === "learning") {
+      requeueCard(CARDS[cardId]);
+    }
   }
 
   function buildQueue() {
-    const now = Date.now();
-    const pool = cardsForDeckFilter();
-    const due = [];
-    const fresh = [];
-    pool.forEach((c) => {
-      const p = state.progress[c.id];
-      if (p.state === "new") fresh.push(c);
-      else if (p.dueAt <= now) due.push(c);
+    return Scheduler.buildQueue(CARDS, state.progress, {
+      newPerSession: state.settings.newPerSession,
+      newIntroducedThisSession: state.newIntroducedThisSession,
+      now: Date.now(),
     });
-    due.sort((a, b) => state.progress[a.id].dueAt - state.progress[b.id].dueAt);
-    const newBatch = fresh.slice(0, state.settings.newPerSession);
-
-    // interleave: 1 new card every 3 due cards, so learning doesn't dominate
-    const merged = [];
-    let di = 0, ni = 0;
-    while (di < due.length || ni < newBatch.length) {
-      for (let k = 0; k < 3 && di < due.length; k++) merged.push(due[di++]);
-      if (ni < newBatch.length) merged.push(newBatch[ni++]);
-    }
-    return merged;
   }
 
   function stats() {
-    const pool = cardsForDeckFilter();
     const now = Date.now();
     let n = 0, learning = 0, review = 0, mastered = 0, due = 0;
-    pool.forEach((c) => {
+    CARDS.forEach((c) => {
       const p = state.progress[c.id];
       if (p.state === "new") n++;
-      else if (p.state === "learning") learning++;
-      else {
+      else if (p.state === "learning") {
+        learning++;
+        due++; // always immediately available within a session
+      } else {
         review++;
         if (p.box >= MASTER_BOX) mastered++;
+        if (p.dueAt <= now) due++;
       }
-      if (p.state !== "new" && p.dueAt <= now) due++;
     });
-    return { total: pool.length, n, learning, review, mastered, due };
+    return { total: CARDS.length, n, learning, review, mastered, due };
   }
 
   // ---------- Rendering ----------
   const app = document.getElementById("app");
 
   function render() {
-    if (state.screen === "home") renderHome();
+    if (state.screen === "picker") renderPicker();
+    else if (state.screen === "home") renderHome();
     else if (state.screen === "study") renderStudy();
     else if (state.screen === "browse") renderBrowse();
   }
 
-  function deckOptionsHtml() {
-    const decks = [1, 2, 3, 4];
-    let html = `<option value="all"${state.settings.deckFilter === "all" ? " selected" : ""}>All decks</option>`;
-    decks.forEach((d) => {
-      html += `<option value="${d}"${String(state.settings.deckFilter) === String(d) ? " selected" : ""}>Mock ${d}</option>`;
+  function renderPicker() {
+    app.innerHTML = `
+      <div class="screen picker">
+        <h1>Dutch Flashcards</h1>
+        <p class="subtitle">Who's studying?</p>
+        <div class="profile-list">
+          ${PROFILES.map((p) => `<button class="primary big profile-btn" data-profile="${escapeHtml(p)}">${escapeHtml(p)}</button>`).join("")}
+        </div>
+      </div>
+    `;
+    app.querySelectorAll(".profile-btn").forEach((btn) => {
+      btn.addEventListener("click", () => selectProfile(btn.dataset.profile));
     });
-    return html;
   }
 
   function renderHome() {
     const s = stats();
     app.innerHTML = `
       <div class="screen home">
-        <h1>Dutch Flashcards</h1>
+        <div class="topbar">
+          <h1>Dutch Flashcards</h1>
+          <button class="link" id="switch-profile-btn">${escapeHtml(state.profile)} · switch</button>
+        </div>
         <p class="subtitle">${s.total} words loaded</p>
 
         <div class="stat-grid">
@@ -226,11 +168,6 @@
           <div class="stat"><span class="num">${s.learning}</span><span class="lbl">Learning</span></div>
           <div class="stat"><span class="num">${s.review}</span><span class="lbl">Review</span></div>
           <div class="stat"><span class="num">${s.mastered}</span><span class="lbl">Mastered</span></div>
-        </div>
-
-        <div class="field">
-          <label for="deck-select">Deck</label>
-          <select id="deck-select">${deckOptionsHtml()}</select>
         </div>
 
         <div class="field">
@@ -244,9 +181,8 @@
       </div>
     `;
 
-    document.getElementById("deck-select").addEventListener("change", (e) => {
-      state.settings.deckFilter = e.target.value;
-      saveSettings();
+    document.getElementById("switch-profile-btn").addEventListener("click", () => {
+      state.screen = "picker";
       render();
     });
     document.getElementById("new-per-session").addEventListener("input", (e) => {
@@ -263,9 +199,9 @@
       render();
     });
     document.getElementById("reset-btn").addEventListener("click", () => {
-      if (confirm("Reset ALL learning progress? This cannot be undone.")) {
+      if (confirm(`Reset ALL learning progress for ${state.profile}? This cannot be undone.`)) {
         state.progress = {};
-        CARDS.forEach((c) => (state.progress[c.id] = freshProgress(c.id)));
+        CARDS.forEach((c) => (state.progress[c.id] = Scheduler.freshProgress(c.id)));
         saveProgress();
         render();
       }
@@ -273,6 +209,8 @@
   }
 
   function startStudy() {
+    state.newIntroducedThisSession = 0;
+    state.sessionStats = { correct: 0, wrong: 0, graduated: 0 };
     state.queue = buildQueue();
     state.screen = "study";
     nextCard();
@@ -284,33 +222,65 @@
     }
     state.current = state.queue.shift() || null;
     state.revealed = false;
+    state.optionsChoices = null;
+    state.answeredOption = null;
+    if (state.current !== null) {
+      const p = state.progress[state.current.id];
+      if (Scheduler.roundMode(p) === "options") {
+        state.optionsChoices = Scheduler.buildOptionsChoices(CARDS, state.current, 4);
+      }
+    }
     render();
+  }
+
+  function endSession() {
+    state.screen = "study";
+    state.current = null;
+    render();
+  }
+
+  function renderSummary() {
+    const s = state.sessionStats;
+    const answered = s.correct + s.wrong;
+    const genuinelyDone = buildQueue().length === 0;
+    app.innerHTML = `
+      <div class="screen study">
+        <div class="topbar">
+          <button class="link" id="home-btn">← Home</button>
+        </div>
+        <div class="card summary-card">
+          <div class="badge">Session summary</div>
+          <div class="nl">Nice work! 🎉</div>
+          <div class="sentence"><div class="s-en">${
+            genuinelyDone
+              ? "Everything you've introduced has graduated to Review. More will unlock as reviews come due, or start again to introduce new words."
+              : "Come back anytime to keep going — there's more due whenever you are."
+          }</div></div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat"><span class="num">${state.newIntroducedThisSession}</span><span class="lbl">New words</span></div>
+          <div class="stat"><span class="num">${answered}</span><span class="lbl">Answered</span></div>
+          <div class="stat"><span class="num">${s.correct}</span><span class="lbl">Right</span></div>
+          <div class="stat"><span class="num">${s.graduated}</span><span class="lbl">Graduated</span></div>
+        </div>
+        <button class="primary big" id="home-again-btn">Back home</button>
+      </div>
+    `;
+    document.getElementById("home-btn").addEventListener("click", goHome);
+    document.getElementById("home-again-btn").addEventListener("click", goHome);
   }
 
   function renderStudy() {
     if (state.current === null) {
-      app.innerHTML = `
-        <div class="screen study">
-          <div class="topbar">
-            <button class="link" id="home-btn">← Home</button>
-          </div>
-          <div class="card">
-            <div class="badge">Session complete</div>
-            <div class="nl">Nothing left to study right now 🎉</div>
-            <div class="sentence"><div class="s-en">New reviews will unlock as their timers come due. Come back later or study another deck.</div></div>
-          </div>
-        </div>
-      `;
-      document.getElementById("home-btn").addEventListener("click", goHome);
+      renderSummary();
       return;
     }
     const card = state.current;
     const p = state.progress[card.id];
-    const isNew = p.state === "new";
+    const mode = Scheduler.roundMode(p);
     const remaining = state.queue.length + 1;
 
-    if (isNew) {
-      // First-ever exposure: show both sides together, no quiz yet
+    if (mode === "new") {
       app.innerHTML = `
         <div class="screen study">
           <div class="topbar">
@@ -326,17 +296,24 @@
               <div class="s-en">${escapeHtml(card.sEn)}</div>
             </div>
           </div>
-          <button class="primary big" id="got-it-btn">Got it — quiz me on this</button>
+          <button class="primary big" id="next-btn">Next</button>
         </div>
       `;
-      document.getElementById("home-btn").addEventListener("click", goHome);
-      document.getElementById("got-it-btn").addEventListener("click", () => {
+      document.getElementById("home-btn").addEventListener("click", endSession);
+      document.getElementById("next-btn").addEventListener("click", () => {
         introduceCard(card.id);
         nextCard();
       });
       return;
     }
 
+    if (mode === "options") {
+      renderOptionsRound(card, p, remaining);
+      return;
+    }
+
+    // mode is 'learning' or 'review' — blind recall
+    const badgeLabel = mode === "learning" ? "Learning" : "Review · box " + p.box;
     if (!state.revealed) {
       app.innerHTML = `
         <div class="screen study">
@@ -345,14 +322,14 @@
             <span class="remaining">${remaining} left</span>
           </div>
           <div class="card quiz-card">
-            <div class="badge ${p.state}">${p.state === "learning" ? "Learning" : "Review · box " + p.box}</div>
+            <div class="badge ${mode}">${badgeLabel}</div>
             <div class="nl">${escapeHtml(card.nl)}</div>
             <div class="sentence"><div class="s-nl">${escapeHtml(card.sNl)}</div></div>
           </div>
           <button class="primary big" id="show-btn">Show answer</button>
         </div>
       `;
-      document.getElementById("home-btn").addEventListener("click", goHome);
+      document.getElementById("home-btn").addEventListener("click", endSession);
       document.getElementById("show-btn").addEventListener("click", () => {
         state.revealed = true;
         render();
@@ -365,7 +342,7 @@
             <span class="remaining">${remaining} left</span>
           </div>
           <div class="card quiz-card revealed">
-            <div class="badge ${p.state}">${p.state === "learning" ? "Learning" : "Review · box " + p.box}</div>
+            <div class="badge ${mode}">${badgeLabel}</div>
             <div class="nl">${escapeHtml(card.nl)}</div>
             <div class="en">${escapeHtml(card.en)}</div>
             <div class="sentence">
@@ -374,27 +351,65 @@
             </div>
           </div>
           <div class="grade-row">
-            <button class="grade again" id="again-btn">Again</button>
-            <button class="grade good" id="good-btn">Good</button>
-            <button class="grade easy" id="easy-btn">Easy</button>
+            <button class="grade wrong" id="wrong-btn">Wrong</button>
+            <button class="grade right" id="right-btn">Right</button>
           </div>
         </div>
       `;
-      document.getElementById("home-btn").addEventListener("click", goHome);
-      document.getElementById("again-btn").addEventListener("click", () => {
-        gradeCard(card.id, "again");
-        // requeue soon within this session so it comes back around
-        state.queue.splice(Math.min(4, state.queue.length), 0, card);
+      document.getElementById("home-btn").addEventListener("click", endSession);
+      document.getElementById("wrong-btn").addEventListener("click", () => {
+        gradeCard(card.id, "wrong");
         nextCard();
       });
-      document.getElementById("good-btn").addEventListener("click", () => {
-        gradeCard(card.id, "good");
+      document.getElementById("right-btn").addEventListener("click", () => {
+        gradeCard(card.id, "right");
         nextCard();
       });
-      document.getElementById("easy-btn").addEventListener("click", () => {
-        gradeCard(card.id, "easy");
-        nextCard();
+    }
+  }
+
+  function renderOptionsRound(card, p, remaining) {
+    const answered = state.answeredOption !== null;
+    app.innerHTML = `
+      <div class="screen study">
+        <div class="topbar">
+          <button class="link" id="home-btn">← Home</button>
+          <span class="remaining">${remaining} left</span>
+        </div>
+        <div class="card quiz-card">
+          <div class="badge options">Pick the meaning</div>
+          <div class="nl">${escapeHtml(card.nl)}</div>
+          <div class="sentence"><div class="s-nl">${escapeHtml(card.sNl)}</div></div>
+        </div>
+        <div class="options-list">
+          ${state.optionsChoices
+            .map((choice, i) => {
+              let cls = "option-btn";
+              if (answered) {
+                if (choice === card.en) cls += " correct";
+                else if (i === state.answeredOption) cls += " incorrect";
+              }
+              return `<button class="${cls}" data-index="${i}" ${answered ? "disabled" : ""}>${escapeHtml(choice)}</button>`;
+            })
+            .join("")}
+        </div>
+        ${answered ? '<button class="primary big" id="next-btn">Next</button>' : ""}
+      </div>
+    `;
+    document.getElementById("home-btn").addEventListener("click", endSession);
+
+    if (!answered) {
+      app.querySelectorAll(".option-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const i = Number(btn.dataset.index);
+          const isCorrect = state.optionsChoices[i] === card.en;
+          state.answeredOption = i;
+          gradeCard(card.id, isCorrect ? "right" : "wrong");
+          render();
+        });
       });
+    } else {
+      document.getElementById("next-btn").addEventListener("click", nextCard);
     }
   }
 
@@ -404,7 +419,7 @@
   }
 
   function renderBrowse() {
-    const pool = cardsForDeckFilter().slice().sort((a, b) => a.nl.localeCompare(b.nl));
+    const pool = CARDS.slice().sort((a, b) => a.nl.localeCompare(b.nl));
     app.innerHTML = `
       <div class="screen browse">
         <div class="topbar">

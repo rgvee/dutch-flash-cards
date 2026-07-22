@@ -179,6 +179,7 @@ button {
   color: var(--muted);
 }
 
+.badge.options { background: #26314a; color: #8fb3f7; }
 .badge.learning { background: #3b3420; color: #e8c76a; }
 .badge.review { background: #1f3a2c; color: #6fd996; }
 
@@ -223,9 +224,57 @@ button {
   font-size: 0.95rem;
 }
 
-.grade.again { background: var(--red); }
-.grade.good { background: var(--blue); }
-.grade.easy { background: var(--green); }
+.grade.wrong { background: var(--red); }
+.grade.right { background: var(--green); }
+
+.options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.option-btn {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 14px;
+  padding: 14px 16px;
+  font-size: 1rem;
+  text-align: left;
+}
+
+.option-btn:disabled { opacity: 0.7; }
+
+.option-btn.correct {
+  border-color: var(--green);
+  background: #17301f;
+  color: #6fd996;
+  opacity: 1;
+}
+
+.option-btn.incorrect {
+  border-color: var(--red);
+  background: #341c1c;
+  color: #f0a5a5;
+  opacity: 1;
+}
+
+.picker {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.profile-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin-top: 24px;
+}
+
+.profile-btn { width: 100%; }
 
 .word-list {
   overflow-y: auto;
