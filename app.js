@@ -69,11 +69,10 @@
     render();
   }
 
-  // Minimum number of other cards shown before a just-answered card, still on
-  // the pre-review ladder, is allowed to reappear. Without this, a card can
-  // land right back at the front of the queue the instant it becomes due
-  // again (it's always due while on the ladder), showing its Options and
-  // Learning rounds back-to-back with nothing in between.
+  // Preferred minimum number of other cards shown before a just-answered
+  // card, still on the pre-review ladder, is allowed to reappear. This is a
+  // soft preference only — nextCard()'s pickNextDistinctFront is the hard
+  // guarantee against an immediate repeat.
   const REQUEUE_GAP = 5;
 
   function requeueCard(card) {
@@ -216,10 +215,34 @@
     nextCard();
   }
 
-  function nextCard() {
+  // Hard guarantee: never show the same word twice in a row. REQUEUE_GAP
+  // spacing is a preference the queue can still violate near-empty; this is
+  // the backstop — it looks ahead (and rebuilds once) for any other
+  // candidate before allowing a repeat, only giving in when the scheduler
+  // confirms there's truly nothing else due.
+  function pickNextDistinctFront(prevId) {
     if (state.queue.length === 0) {
       state.queue = buildQueue();
     }
+    if (prevId === null) return;
+    let idx = state.queue.findIndex((c) => c.id !== prevId);
+    if (idx === -1) {
+      const rebuilt = buildQueue();
+      const altIdx = rebuilt.findIndex((c) => c.id !== prevId);
+      if (altIdx !== -1) {
+        state.queue = rebuilt;
+        idx = altIdx;
+      }
+    }
+    if (idx > 0) {
+      const [card] = state.queue.splice(idx, 1);
+      state.queue.unshift(card);
+    }
+  }
+
+  function nextCard() {
+    const prevId = state.current ? state.current.id : null;
+    pickNextDistinctFront(prevId);
     state.current = state.queue.shift() || null;
     state.revealed = false;
     state.optionsChoices = null;
