@@ -3,3 +3,5 @@
 *.pdf
 *.docx
 node_modules/
+CONTEXT.md
+tests/
