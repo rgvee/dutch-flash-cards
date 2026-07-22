@@ -460,6 +460,16 @@
     return div.innerHTML;
   }
 
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== " " && e.key !== "ArrowRight") return;
+    if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+    const nextBtn = document.getElementById("next-btn");
+    if (nextBtn) {
+      e.preventDefault();
+      nextBtn.click();
+    }
+  });
+
   render();
 
   if ("serviceWorker" in navigator) {
