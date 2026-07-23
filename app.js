@@ -70,14 +70,19 @@
     render();
   }
 
-  // Preferred minimum number of other cards shown before a just-answered
-  // card, still on the pre-review ladder, is allowed to reappear. This is a
-  // soft preference only — nextCard()'s pickNextDistinctFront is the hard
+  // Preferred number of other cards shown before a just-answered card, still
+  // on the pre-review ladder, is allowed to reappear. Randomized within a
+  // range (rather than a fixed gap) so repeats land at unpredictable spots
+  // instead of every Nth card, cutting the recency effect of seeing the same
+  // word again right after a short, fixed interval. This is a soft
+  // preference only — nextCard()'s pickNextDistinctFront is the hard
   // guarantee against an immediate repeat.
-  const REQUEUE_GAP = 5;
+  const REQUEUE_GAP_MIN = 8;
+  const REQUEUE_GAP_MAX = 14;
 
   function requeueCard(card) {
-    const pos = Math.min(REQUEUE_GAP, state.queue.length);
+    const gap = REQUEUE_GAP_MIN + Math.floor(Math.random() * (REQUEUE_GAP_MAX - REQUEUE_GAP_MIN + 1));
+    const pos = Math.min(gap, state.queue.length);
     state.queue.splice(pos, 0, card);
   }
 
