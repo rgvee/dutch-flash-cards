@@ -14,7 +14,10 @@
   // answer at any point (including from Review) resets to step 0 — back into
   // "options" mode — never straight back into blind recall.
   const LEARNING_STEPS = ["options", "options", "learning"];
-  const REVIEW_INTERVALS_HOURS = [4, 12, 24, 48, 96, 168]; // box 0..5
+  // Cram ladder for a 3-day deadline: 10min, 1h, 4h, 12h, 24h, 48h (box 0..5)
+  // — every graduated word gets several reviews within the 3-day window,
+  // instead of the slower spaced-repetition default (Resolved 2026-07-23).
+  const REVIEW_INTERVALS_HOURS = [1 / 6, 1, 4, 12, 24, 48];
   const MASTER_BOX = 4; // box index at which a card counts as "mastered"
 
   function normalizeKey(nl) {
@@ -23,12 +26,12 @@
 
   function buildCards(raw) {
     const seen = new Map();
-    raw.forEach(([nl, en, sNl, sEn, deck]) => {
+    raw.forEach(([nl, en, sNl, sEn, deck, breakdown]) => {
       const key = normalizeKey(nl);
       if (seen.has(key)) {
         seen.get(key).decks.add(deck);
       } else {
-        seen.set(key, { nl, en, sNl, sEn, decks: new Set([deck]) });
+        seen.set(key, { nl, en, sNl, sEn, breakdown, decks: new Set([deck]) });
       }
     });
     let id = 0;
@@ -38,6 +41,7 @@
       en: c.en,
       sNl: c.sNl,
       sEn: c.sEn,
+      breakdown: c.breakdown,
       decks: Array.from(c.decks).sort(),
     }));
   }

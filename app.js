@@ -326,6 +326,7 @@
               <div class="s-nl">${escapeHtml(card.sNl)}</div>
               <div class="s-en">${escapeHtml(card.sEn)}</div>
             </div>
+            ${renderBreakdown(card)}
           </div>
           <button class="primary big" id="next-btn">Next</button>
         </div>
@@ -380,6 +381,7 @@
               <div class="s-nl">${escapeHtml(card.sNl)}</div>
               <div class="s-en">${escapeHtml(card.sEn)}</div>
             </div>
+            ${renderBreakdown(card)}
           </div>
           <div class="grade-row">
             <button class="grade wrong" id="wrong-btn">Wrong</button>
@@ -483,6 +485,11 @@
     }
     renderList("");
     document.getElementById("search-box").addEventListener("input", (e) => renderList(e.target.value));
+  }
+
+  function renderBreakdown(card) {
+    if (!card.breakdown) return "";
+    return `<div class="breakdown">${escapeHtml(card.breakdown)}</div>`;
   }
 
   function escapeHtml(str) {
