@@ -57,6 +57,7 @@
     optionsChoices: null,
     answeredOption: null,
     screen: "picker",
+    currentMode: null,
     newIntroducedThisSession: 0,
     sessionStats: { correct: 0, wrong: 0, graduated: 0 },
   };
@@ -249,9 +250,12 @@
     state.answeredOption = null;
     if (state.current !== null) {
       const p = state.progress[state.current.id];
-      if (Scheduler.roundMode(p) === "options") {
+      state.currentMode = Scheduler.roundMode(p);
+      if (state.currentMode === "options") {
         state.optionsChoices = Scheduler.buildOptionsChoices(CARDS, state.current, 4);
       }
+    } else {
+      state.currentMode = null;
     }
     render();
   }
@@ -300,7 +304,11 @@
     }
     const card = state.current;
     const p = state.progress[card.id];
-    const mode = Scheduler.roundMode(p);
+    // Frozen at pick-time (nextCard), not recomputed here — grading a round
+    // mutates progress synchronously, and a bare render() (e.g. after an
+    // Options click) must keep showing the round just answered, not
+    // teleport to whatever mode the card's progress just advanced into.
+    const mode = state.currentMode;
     const remaining = state.queue.length + 1;
 
     if (mode === "new") {
