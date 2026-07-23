@@ -13,11 +13,14 @@
   // available to reappear in the queue while it's in this ladder. A wrong
   // answer at any point (including from Review) resets to step 0 — back into
   // "options" mode — never straight back into blind recall.
-  const LEARNING_STEPS = ["options", "options", "learning"];
-  // Cram ladder for a 3-day deadline: 10min, 1h, 4h, 12h, 24h, 48h (box 0..5)
-  // — every graduated word gets several reviews within the 3-day window,
-  // instead of the slower spaced-repetition default (Resolved 2026-07-23).
-  const REVIEW_INTERVALS_HOURS = [1 / 6, 1, 4, 12, 24, 48];
+  // Trimmed to 1 options + 1 recall (was 2 options + 1 recall) so a new word
+  // reaches blind recall — and graduates into real spaced Review — faster,
+  // favoring review reps over multiple-choice exposure (Resolved 2026-07-23).
+  const LEARNING_STEPS = ["options", "learning"];
+  // Cram ladder for a 24-hour deadline: 5min, 15min, 1h, 3h, 8h, 16h (box 0..5)
+  // — the whole ladder fits inside the 24h window so a word graduated early
+  // still gets several reviews before time is up (Resolved 2026-07-23).
+  const REVIEW_INTERVALS_HOURS = [1 / 12, 1 / 4, 1, 3, 8, 16];
   const MASTER_BOX = 4; // box index at which a card counts as "mastered"
 
   function normalizeKey(nl) {
