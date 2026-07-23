@@ -116,26 +116,25 @@
     return p;
   }
 
+  // In-place Fisher-Yates shuffle. Returns the same array for chaining.
+  function shuffle(arr, random) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      const tmp = arr[i];
+      arr[i] = arr[j];
+      arr[j] = tmp;
+    }
+    return arr;
+  }
+
   // Build a multiple-choice option set for an "options" round: the correct
   // English answer plus `count - 1` distractors drawn from the rest of pool.
   function buildOptionsChoices(pool, card, count, rng) {
     const random = rng || Math.random;
     const others = pool.filter((c) => c.id !== card.id);
-    const shuffled = others.slice();
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(random() * (i + 1));
-      const tmp = shuffled[i];
-      shuffled[i] = shuffled[j];
-      shuffled[j] = tmp;
-    }
+    const shuffled = shuffle(others.slice(), random);
     const distractors = shuffled.slice(0, Math.max(0, count - 1)).map((c) => c.en);
-    const choices = distractors.concat([card.en]);
-    for (let i = choices.length - 1; i > 0; i--) {
-      const j = Math.floor(random() * (i + 1));
-      const tmp = choices[i];
-      choices[i] = choices[j];
-      choices[j] = tmp;
-    }
+    const choices = shuffle(distractors.concat([card.en]), random);
     return choices;
   }
 
@@ -150,7 +149,8 @@
   // repetition. Only "review" state cards are gated by real elapsed time
   // (REVIEW_INTERVALS_HOURS), since those are meant to come back hours/days
   // later, not within the same sitting.
-  function buildQueue(pool, progressById, opts) {
+  function buildQueue(pool, progressById, opts, rng) {
+    const random = rng || Math.random;
     const now = opts.now;
     const due = [];
     const fresh = [];
@@ -160,7 +160,13 @@
       else if (p.state === "learning") due.push(c);
       else if (p.dueAt <= now) due.push(c);
     });
-    due.sort((a, b) => progressById[a.id].dueAt - progressById[b.id].dueAt);
+    // Shuffle first, then stable-sort by dueAt: cards with equal dueAt (all
+    // "learning" state cards share dueAt=0, and ties happen in "review" too)
+    // keep the shuffled order instead of always landing in a fixed id order —
+    // otherwise the same options/learning/review cards line up in the same
+    // sequence every session, which is as predictable as a fixed repeat gap.
+    shuffle(due, random).sort((a, b) => progressById[a.id].dueAt - progressById[b.id].dueAt);
+    shuffle(fresh, random);
 
     const remaining = Math.max(0, opts.newPerSession - opts.newIntroducedThisSession);
     const newBatch = fresh.slice(0, remaining);
