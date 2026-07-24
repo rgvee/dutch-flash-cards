@@ -377,6 +377,15 @@ button {
   margin-top: 0;
 }
 
+.group-header {
+  padding: 10px 4px 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--orange);
+}
+
 .word-row {
   display: flex;
   align-items: center;

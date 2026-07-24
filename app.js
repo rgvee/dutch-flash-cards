@@ -504,6 +504,166 @@
     render();
   }
 
+  const TOPIC_GROUPS = [
+    { key: "time", label: "Time & Frequency" },
+    { key: "numbers", label: "Numbers & Quantity" },
+    { key: "bureaucracy", label: "Housing, Municipal & Bureaucracy" },
+    { key: "work", label: "Work, Career & Education" },
+    { key: "medical", label: "Medical, Health & Safety" },
+    { key: "shopping", label: "Shopping, Money & Transport" },
+    { key: "opposites", label: "Opposites & Descriptive" },
+    { key: "social", label: "People & Social Life" },
+    { key: "household", label: "Household, Objects & Food" },
+    { key: "places", label: "Places & Facilities" },
+    { key: "connectors", label: "Connectors & Communication" },
+    { key: "misc", label: "General Verbs & Misc" },
+  ];
+  const TOPIC_ORDER = TOPIC_GROUPS.reduce((m, g, i) => ((m[g.key] = i), m), {});
+
+  const TOPIC_MAP = {
+    // Time & Frequency
+    "planning": "time", "opnieuw": "time", "wanneer": "time", "jaarlijkse": "time",
+    "regelmatig": "time", "zo snel mogelijk": "time", "uiterlijk": "time", "tijdens": "time",
+    "openingstijden": "time", "altijd": "time", "op elk moment": "time", "werkdagen": "time",
+    "weekend": "time", "nooit": "time", "te lang": "time", "telefonisch spreekuur": "time",
+    "vakantie": "time", "hoe lang": "time", "straks": "time", "vaker": "time", "hoe vaak": "time",
+    "overdag": "time", "'s avonds": "time", "afspreken": "time", "toen": "time", "vorig jaar": "time",
+    "doordeweeks": "time", "beschikbaar": "time", "eerder": "time", "gisteren": "time",
+    "werkrooster": "time", "op tijd": "time", "verplaatst": "time", "vakantierooster": "time",
+    "achter elkaar": "time", "volgende week": "time", "maand": "time", "tot": "time", "rooster": "time",
+    "volgende maand": "time", "langer": "time", "van tevoren": "time", "vanaf": "time", "weer": "time",
+    "doorgaan": "time", "feestdagen": "time", "een afspraak maken": "time", "vóór": "time",
+    "gedurende": "time", "tijdelijk": "time", "aansluitend/direct na": "time", "vroeg": "time",
+    "laat": "time", "beginnen": "time",
+    // Numbers & Quantity
+    "verschillende": "numbers", "het eerste": "numbers", "een beetje": "numbers", "extra/meer": "numbers",
+    "meest": "numbers", "meest geschikt": "numbers", "hoeveel": "numbers", "bestaat uit": "numbers",
+    "zoveel mogelijk": "numbers", "niets": "numbers", "overig": "numbers", "te weinig": "numbers",
+    "weinig": "numbers", "volgorde": "numbers", "sommige": "numbers", "eerste": "numbers",
+    "1 keer": "numbers", "derde": "numbers", "laatste": "numbers", "genoeg": "numbers",
+    "minder": "numbers", "iedereen": "numbers", "uitrekenen": "numbers", "soorten": "numbers",
+    "het enige": "numbers", "hetzelfde": "numbers", "voldoende": "numbers", "allemaal": "numbers",
+    "iedere": "numbers", "andere": "numbers", "alleen": "numbers", "te veel": "numbers",
+    "de rest": "numbers", "ten minste/minimaal": "numbers", "maximaal/ten hoogste": "numbers",
+    "stijgen/toenemen": "numbers", "dalen/afnemen": "numbers", "alles": "numbers", "optioneel": "numbers",
+    "verschillende/diverse": "numbers",
+    // Housing, Municipal & Bureaucracy
+    "dorpsbewoner": "bureaucracy", "verdieping/etage": "bureaucracy", "aanmelden": "bureaucracy",
+    "eigenaar": "bureaucracy", "buurthuis": "bureaucracy", "persoonlijke gegevens": "bureaucracy",
+    "rijbewijs": "bureaucracy", "schriftelijk": "bureaucracy", "ziek melden": "bureaucracy",
+    "buurtbijeenkomst": "bureaucracy", "buurt": "bureaucracy", "buurbewoners": "bureaucracy",
+    "afmelden": "bureaucracy", "verhuizen": "bureaucracy", "aanvragen": "bureaucracy",
+    "gemeente": "bureaucracy", "gebouw": "bureaucracy", "verbouwing": "bureaucracy",
+    "de regels": "bureaucracy", "nieuwsbrief": "bureaucracy", "opzegtermijn": "bureaucracy",
+    "vervallen": "bureaucracy", "vergunning": "bureaucracy", "voorwaarden": "bureaucracy",
+    "toestemming": "bureaucracy", "onderhoudswerkzaamheden": "bureaucracy", "afvalinzameling": "bureaucracy",
+    "grofvuil": "bureaucracy", "parkeerbeleid": "bureaucracy", "berichtenbox": "bureaucracy",
+    "ziekmelden": "bureaucracy", "afzeggen/annuleren": "bureaucracy", "toegestaan": "bureaucracy",
+    "verboden": "bureaucracy",
+    // Work, Career & Education
+    "bladzijde/pagina": "work", "onthouden": "work", "pauze": "work", "uitleggen": "work",
+    "tekst": "work", "basisschool/lagere school": "work", "medewerkers": "work", "verdienen": "work",
+    "afspraak": "work", "cv": "work", "vacature": "work", "een baan": "work", "werkervaring": "work",
+    "leidinggevende": "work", "open dag": "work", "fouten": "work", "taal": "work", "afgemaakt": "work",
+    "geslaagd": "work", "vergadering": "work", "ervaring": "work", "geschiedenis": "work",
+    "oefenen": "work", "theorieboek": "work", "inschrijven": "work", "aan het werk": "work",
+    "kennis": "work", "studeren": "work", "werken": "work", "taken": "work", "cursus": "work",
+    "baan": "work", "opleiding": "work", "folder": "work", "studiecentrum": "work", "lokaal": "work",
+    "opletten": "work", "inhalen": "work", "toets": "work", "woordenboek": "work", "opdrachten": "work",
+    "afdeling": "work", "vereiste/verplicht": "work", "ervaring is een pré": "work",
+    "aanwezigheid": "work", "behalen/slagen": "work", "zakken": "work", "vast/permanent": "work",
+    "taak": "work",
+    // Medical, Health & Safety
+    "ehbo": "medical", "verzorgers": "medical", "reanimeren": "medical", "kiespijn": "medical",
+    "nood nummer": "medical", "kindertandarts": "medical", "spoed": "medical", "bedrijfsarts": "medical",
+    "tandarts": "medical", "voorschrift/recept": "medical", "lege maag": "medical",
+    "bijwerkingen": "medical", "spoedgeval": "medical", "nabloeding": "medical", "betreden": "medical",
+    "veiligheidsvoorschrift": "medical", "slecht ter been": "medical", "gevaarlijk": "medical",
+    "veilig": "medical",
+    // Shopping, Money & Transport
+    "wegslepen": "shopping", "gekocht/kopen": "shopping", "betalen": "shopping", "bezorging": "shopping",
+    "levertijd": "shopping", "klantenservice": "shopping", "trein": "shopping", "ophalen": "shopping",
+    "cadeaubon": "shopping", "geld": "shopping", "gebruikte spullen": "shopping", "verkopen": "shopping",
+    "gratis": "shopping", "scooter": "shopping", "abonnement": "shopping", "ruilen": "shopping",
+    "klantenkaart": "shopping", "verkopers": "shopping", "vertrekken": "shopping", "kosten": "shopping",
+    "duurder": "shopping", "hoe duur": "shopping", "winkels": "shopping", "bestellen": "shopping",
+    "winkel": "shopping", "bushalte": "shopping", "opstappen": "shopping", "klanten": "shopping",
+    "vergoeding": "shopping", "afgeprijsd": "shopping", "wisselbon/tegoedbon": "shopping",
+    "kassabon": "shopping", "vervangend vervoer": "shopping", "reistijd": "shopping",
+    "vertraging": "shopping", "in rekening brengen": "shopping", "goedkoop": "shopping",
+    "duur": "shopping", "betaald": "shopping", "vertrek": "shopping", "aankomst": "shopping",
+    "blauwe zone": "shopping", "vertraagd": "shopping",
+    // Opposites & Descriptive
+    "rustig": "opposites", "belangrijk": "opposites", "kapot/stuk": "opposites", "geopend": "opposites",
+    "gesloten": "opposites", "beter": "opposites", "moeilijk": "opposites", "makkelijk": "opposites",
+    "boven": "opposites", "beneden": "opposites", "door elkaar": "opposites", "nieuw": "opposites",
+    "vies": "opposites", "bijzonder": "opposites", "gezellig": "opposites", "druk": "opposites",
+    "schoon": "opposites", "bekend": "opposites", "vriendelijk": "opposites", "tevreden": "opposites",
+    "gebroken": "opposites", "dicht": "opposites", "normaal": "opposites", "dicht/gesloten": "opposites",
+    "stil zitten": "opposites", "netjes": "opposites", "fijn": "opposites", "vervelend": "opposites",
+    "slim": "opposites", "simpel": "opposites", "rondom": "opposites", "vol": "opposites",
+    "leeg": "opposites", "juist/goed": "opposites", "onjuist/fout": "opposites",
+    "voorkant/voorzijde": "opposites", "achterkant/achterzijde": "opposites", "naar boven": "opposites",
+    "naar beneden": "opposites", "links": "opposites", "rechts": "opposites", "dichtbij": "opposites",
+    "ver weg": "opposites", "open": "opposites", "vrij": "opposites", "bezet": "opposites",
+    "muzikaal": "opposites",
+    // People & Social Life
+    "leeftijd": "social", "feest": "social", "afscheid nemen": "social", "activiteit": "social",
+    "spelletjes": "social", "bezoek": "social", "samen": "social", "mensen": "social",
+    "kermis": "social", "elkaar": "social", "missen": "social", "foto's": "social",
+    "dochtertje": "social", "vieren": "social", "getrouwd": "social", "lied": "social",
+    "geholpen/helpen": "social", "kinderen": "social", "meedoen": "social", "bruiloft": "social",
+    "cadeau": "social", "verrassing": "social", "feestcommissie": "social", "ouders": "social",
+    "bijeenkomsten": "social", "goede doelen": "social", "vrijwilligers": "social",
+    "vrijwillig": "social", "helpen": "social", "uitnodiging": "social", "optreden": "social",
+    "thema": "social", "muziek": "social", "activiteiten": "social", "anderen": "social",
+    "meemogen": "social",
+    // Household, Objects & Food
+    "zwemkleding": "household", "handdoek": "household", "bureau": "household", "rits": "household",
+    "rugtas": "household", "bril": "household", "portemonnee": "household", "lunch": "household",
+    "sportkleding": "household", "brood": "household", "dweilen": "household", "hapjes": "household",
+    "drankjes": "household", "pannenkoeken": "household", "gereedschap": "household", "hout": "household",
+    "meubel": "household", "stofzuigen": "household", "speelgoed": "household", "schoonmaken": "household",
+    "knipbeurt": "household", "wassen": "household", "knippen": "household", "boek": "household",
+    // Places & Facilities
+    "plek/plaats": "places", "omgeving": "places", "portier": "places", "naartoe": "places",
+    "kinderboerderij": "places", "receptie": "places", "praktijk": "places", "buitenland": "places",
+    "buiten": "places", "secretariaat": "places", "ontvangst": "places", "plekken": "places",
+    "balie": "places", "de weg": "places", "begane grond": "places", "kantine": "places",
+    "zwembad": "places", "ingang": "places", "uitgang": "places",
+    // Connectors & Communication
+    "of": "connectors", "daarom": "connectors", "oproepen": "connectors", "vooral": "connectors",
+    "vragen": "connectors", "bereiken": "connectors", "bereikbaar": "connectors",
+    "bespreken": "connectors", "bedanken": "connectors", "zonder": "connectors", "echt": "connectors",
+    "het is jammer": "connectors", "niet alleen": "connectors", "waarom": "connectors",
+    "sturen": "connectors", "vinden": "connectors", "opsturen": "connectors", "daarover": "connectors",
+    "laten weten": "connectors", "daarmee": "connectors", "helaas": "connectors",
+    "namelijk": "connectors", "telefoon opnemen": "connectors", "reden": "connectors",
+    "praten": "connectors", "natuurlijk": "connectors", "misschien": "connectors",
+    "omdat": "connectors", "waar": "connectors", "bellen": "connectors", "maar": "connectors",
+    "trouwens": "connectors", "ik heb geen idee": "connectors", "dat weet ze niet": "connectors",
+    "de reden": "connectors", "behalve/uitgezonderd": "connectors", "tenzij": "connectors",
+    "rekening houden met": "connectors",
+    // General Verbs & Misc
+    "nadenken": "misc", "inhoud": "misc", "manier": "misc", "bepalen/besluiten": "misc",
+    "neem": "misc", "weghalen": "misc", "meenemen": "misc", "aanraden/adviseren": "misc",
+    "vergeten": "misc", "merken": "misc", "zelf": "misc", "kiezen": "misc", "gekozen/kiezen": "misc",
+    "geregeld": "misc", "weggooien": "misc", "repareren": "misc", "maken": "misc",
+    "terugbrengen": "misc", "spullen/dingen": "misc", "controleren": "misc", "proberen": "misc",
+    "kunnen": "misc", "zetten": "misc", "veranderingen": "misc", "gebruiken": "misc",
+    "durven": "misc", "moeite": "misc", "schuiven": "misc", "deden": "misc", "stoppen": "misc",
+    "blijven": "misc", "groeien": "misc", "voordeel": "misc", "nadeel": "misc", "omgaan met": "misc",
+    "probleem": "misc", "zoeken": "misc", "ontwerpen": "misc", "nodig": "misc", "weten": "misc",
+    "veranderen": "misc", "horen": "misc", "willen": "misc", "repareren/maken": "misc",
+    "overzicht/schema": "misc", "mogen": "misc", "overslaan": "misc",
+    "uitzoeken": "misc", "opgeven": "misc", "moeten": "misc", "vertellen": "connectors",
+    "informatie": "connectors", "basis": "work", "werktijden": "time",
+  };
+
+  function getTopic(card) {
+    return TOPIC_MAP[card.nl.trim().toLowerCase()] || "misc";
+  }
+
   const BROWSE_COLUMNS = [
     { key: "en", label: "English", cls: "w-en", get: (c) => c.en },
     { key: "breakdown", label: "Breakdown", cls: "w-breakdown", get: (c) => c.breakdown || "—" },
@@ -529,6 +689,7 @@
             <select id="sort-select">
               <option value="alpha">Sort: A–Z</option>
               <option value="default">Sort: Default order</option>
+              <option value="topic">Sort: By topic</option>
             </select>
             <div class="col-toggles">
               ${BROWSE_COLUMNS.map(
@@ -564,6 +725,14 @@
     function getPool() {
       const pool = CARDS.slice();
       if (state.browseSort === "alpha") pool.sort((a, b) => a.nl.localeCompare(b.nl));
+      if (state.browseSort === "topic") {
+        pool.sort((a, b) => {
+          const ta = TOPIC_ORDER[getTopic(a)];
+          const tb = TOPIC_ORDER[getTopic(b)];
+          if (ta !== tb) return ta - tb;
+          return a.nl.localeCompare(b.nl);
+        });
+      }
       return pool;
     }
 
@@ -582,12 +751,23 @@
         : pool;
       countEl.textContent = `${filtered.length} words`;
       const cols = visibleColumns();
+      const showGroups = state.browseSort === "topic";
+      let lastTopic = null;
       listEl.innerHTML = filtered
         .map((c, i) => {
           const p = state.progress[c.id];
           const statusClass = p.state === "new" ? "new" : p.state === "learning" ? "learning" : p.box >= MASTER_BOX ? "mastered" : "review";
           const cells = cols.map((col) => `<span class="${col.cls}">${escapeHtml(col.get(c))}</span>`).join("");
-          return `<div class="word-row">
+          let groupHeader = "";
+          if (showGroups) {
+            const topic = getTopic(c);
+            if (topic !== lastTopic) {
+              lastTopic = topic;
+              const group = TOPIC_GROUPS[TOPIC_ORDER[topic]];
+              groupHeader = `<div class="group-header">${escapeHtml(group.label)}</div>`;
+            }
+          }
+          return `${groupHeader}<div class="word-row">
             <span class="row-index">${i + 1}</span>
             <span class="dot ${statusClass}"></span>
             <span class="w-nl">${escapeHtml(c.nl)}</span>
