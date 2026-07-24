@@ -40,7 +40,41 @@
     } catch (e) {
       s = {};
     }
-    return Object.assign({ newPerSession: 20 }, s);
+    return Object.assign({ newPerSession: 20, soundOn: true }, s);
+  }
+
+  // ---------- Sound ----------
+  // Synthesized tones (no audio assets to fetch/cache) — kept quiet and
+  // short so they add feedback without becoming annoying over a long
+  // session. Muteable per-profile via the Home screen toggle.
+  let audioCtx = null;
+  function playTone(freq, duration, volume) {
+    if (!state.settings || !state.settings.soundOn) return;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      if (!audioCtx) audioCtx = new Ctx();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    } catch (e) {}
+  }
+  function playTap() {
+    playTone(600, 0.06, 0.05);
+  }
+  function playCorrect() {
+    playTone(660, 0.09, 0.06);
+    setTimeout(() => playTone(880, 0.12, 0.06), 80);
+  }
+  function playWrong() {
+    playTone(220, 0.18, 0.05);
   }
 
   function saveSettings() {
@@ -59,6 +93,7 @@
     screen: "picker",
     currentMode: null,
     newIntroducedThisSession: 0,
+    reviewOnly: false,
     sessionStats: { correct: 0, wrong: 0, graduated: 0 },
   };
 
@@ -98,6 +133,8 @@
     const wasLearning = before.state === "learning";
     const after = Scheduler.gradeCard(before, grade, Date.now());
     state.progress[cardId] = after;
+    if (grade === "right") playCorrect();
+    else playWrong();
     if (grade === "right") state.sessionStats.correct += 1;
     else state.sessionStats.wrong += 1;
     if (wasLearning && after.state === "review") state.sessionStats.graduated += 1;
@@ -109,7 +146,7 @@
 
   function buildQueue() {
     return Scheduler.buildQueue(CARDS, state.progress, {
-      newPerSession: state.settings.newPerSession,
+      newPerSession: state.reviewOnly ? 0 : state.settings.newPerSession,
       newIntroducedThisSession: state.newIntroducedThisSession,
       now: Date.now(),
     });
@@ -164,7 +201,10 @@
       <div class="screen home">
         <div class="topbar">
           <h1>Dutch Flashcards</h1>
-          <button class="link" id="switch-profile-btn">${escapeHtml(state.profile)} · switch</button>
+          <div>
+            <button class="link" id="sound-toggle-btn">${state.settings.soundOn ? "🔊" : "🔇"}</button>
+            <button class="link" id="switch-profile-btn">${escapeHtml(state.profile)} · switch</button>
+          </div>
         </div>
         <p class="subtitle">${s.total} words loaded</p>
 
@@ -181,6 +221,7 @@
         </div>
 
         <button class="primary big" id="study-btn">${s.due + Math.min(s.n, state.settings.newPerSession) > 0 ? "Study (" + (s.due + Math.min(s.n, state.settings.newPerSession)) + ")" : "Nothing due right now"}</button>
+        <button class="secondary" id="review-btn" ${s.due > 0 ? "" : "disabled"}>${s.due > 0 ? "Review only (" + s.due + ")" : "Nothing due for review"}</button>
         <button class="secondary" id="browse-btn">Browse all words</button>
         <button class="link danger" id="reset-btn">Reset all progress</button>
       </div>
@@ -188,6 +229,11 @@
 
     document.getElementById("switch-profile-btn").addEventListener("click", () => {
       state.screen = "picker";
+      render();
+    });
+    document.getElementById("sound-toggle-btn").addEventListener("click", () => {
+      state.settings.soundOn = !state.settings.soundOn;
+      saveSettings();
       render();
     });
     document.getElementById("new-per-session").addEventListener("input", (e) => {
@@ -198,7 +244,8 @@
       saveSettings();
       render();
     });
-    document.getElementById("study-btn").addEventListener("click", startStudy);
+    document.getElementById("study-btn").addEventListener("click", () => startStudy(false));
+    document.getElementById("review-btn").addEventListener("click", () => startStudy(true));
     document.getElementById("browse-btn").addEventListener("click", () => {
       state.screen = "browse";
       render();
@@ -213,7 +260,8 @@
     });
   }
 
-  function startStudy() {
+  function startStudy(reviewOnly) {
+    state.reviewOnly = !!reviewOnly;
     state.newIntroducedThisSession = 0;
     state.sessionStats = { correct: 0, wrong: 0, graduated: 0 };
     state.queue = buildQueue();
@@ -321,7 +369,7 @@
         <div class="screen study">
           <div class="topbar">
             <button class="link" id="home-btn">← Home</button>
-            <span class="remaining">${remaining} left</span>
+            <span class="remaining">${remaining} left${state.reviewOnly ? " · Review" : ""}</span>
           </div>
           <div class="card new-card">
             <div class="badge">New word</div>
@@ -356,7 +404,7 @@
         <div class="screen study">
           <div class="topbar">
             <button class="link" id="home-btn">← Home</button>
-            <span class="remaining">${remaining} left</span>
+            <span class="remaining">${remaining} left${state.reviewOnly ? " · Review" : ""}</span>
           </div>
           <div class="card quiz-card">
             <div class="badge ${mode}">${badgeLabel}</div>
@@ -376,7 +424,7 @@
         <div class="screen study">
           <div class="topbar">
             <button class="link" id="home-btn">← Home</button>
-            <span class="remaining">${remaining} left</span>
+            <span class="remaining">${remaining} left${state.reviewOnly ? " · Review" : ""}</span>
           </div>
           <div class="card quiz-card revealed">
             <div class="badge ${mode}">${badgeLabel}</div>
@@ -412,7 +460,7 @@
       <div class="screen study">
         <div class="topbar">
           <button class="link" id="home-btn">← Home</button>
-          <span class="remaining">${remaining} left</span>
+          <span class="remaining">${remaining} left${state.reviewOnly ? " · Review" : ""}</span>
         </div>
         <div class="card quiz-card">
           <div class="badge options">Pick the meaning</div>
@@ -456,40 +504,112 @@
     render();
   }
 
+  const BROWSE_COLUMNS = [
+    { key: "en", label: "English", cls: "w-en", get: (c) => c.en },
+    { key: "breakdown", label: "Breakdown", cls: "w-breakdown", get: (c) => c.breakdown || "—" },
+    { key: "sentence", label: "Sentence", cls: "w-sentence", get: (c) => c.sNl || "—" },
+    { key: "meaning", label: "Meaning", cls: "w-meaning", get: (c) => c.sEn || "—" },
+  ];
+
   function renderBrowse() {
-    const pool = CARDS.slice().sort((a, b) => a.nl.localeCompare(b.nl));
+    if (state.browseSort === undefined) state.browseSort = "alpha";
+    if (state.browseCols === undefined) {
+      state.browseCols = { en: true, breakdown: false, sentence: false, meaning: false };
+    }
+
     app.innerHTML = `
       <div class="screen browse">
         <div class="topbar">
           <button class="link" id="home-btn">← Home</button>
-          <span class="remaining">${pool.length} words</span>
+          <span class="remaining" id="word-count"></span>
         </div>
         <input type="search" id="search-box" placeholder="Search Dutch or English...">
-        <div class="word-list" id="word-list"></div>
+        <div class="browse-controls">
+          <select id="sort-select">
+            <option value="alpha">Sort: A–Z</option>
+            <option value="default">Sort: Default order</option>
+          </select>
+          <div class="col-toggles">
+            ${BROWSE_COLUMNS.map(
+              (col) => `<label class="hide-toggle">
+                <input type="checkbox" class="col-cb" data-col="${col.key}">
+                ${col.label}
+              </label>`
+            ).join("")}
+          </div>
+        </div>
+        <div class="word-table">
+          <div class="word-table-header" id="word-table-header"></div>
+          <div id="word-list"></div>
+        </div>
       </div>
     `;
     document.getElementById("home-btn").addEventListener("click", goHome);
     const listEl = document.getElementById("word-list");
+    const headerEl = document.getElementById("word-table-header");
+    const countEl = document.getElementById("word-count");
+    const sortSelect = document.getElementById("sort-select");
+    sortSelect.value = state.browseSort;
+    document.querySelectorAll(".col-cb").forEach((cb) => {
+      cb.checked = state.browseCols[cb.dataset.col];
+    });
+
+    function visibleColumns() {
+      return BROWSE_COLUMNS.filter((col) => state.browseCols[col.key]);
+    }
+
+    function getPool() {
+      const pool = CARDS.slice();
+      if (state.browseSort === "alpha") pool.sort((a, b) => a.nl.localeCompare(b.nl));
+      return pool;
+    }
+
+    function renderHeader() {
+      const cols = visibleColumns();
+      headerEl.innerHTML =
+        `<span></span><span class="w-nl">Dutch</span>` +
+        cols.map((col) => `<span class="${col.cls}">${col.label}</span>`).join("");
+    }
 
     function renderList(filter) {
       const f = filter.trim().toLowerCase();
+      const pool = getPool();
       const filtered = f
         ? pool.filter((c) => c.nl.toLowerCase().includes(f) || c.en.toLowerCase().includes(f))
         : pool;
+      countEl.textContent = `${filtered.length} words`;
+      const cols = visibleColumns();
       listEl.innerHTML = filtered
         .map((c) => {
           const p = state.progress[c.id];
           const statusClass = p.state === "new" ? "new" : p.state === "learning" ? "learning" : p.box >= MASTER_BOX ? "mastered" : "review";
+          const cells = cols.map((col) => `<span class="${col.cls}">${escapeHtml(col.get(c))}</span>`).join("");
           return `<div class="word-row">
             <span class="dot ${statusClass}"></span>
             <span class="w-nl">${escapeHtml(c.nl)}</span>
-            <span class="w-en">${escapeHtml(c.en)}</span>
+            ${cells}
           </div>`;
         })
         .join("");
     }
-    renderList("");
+
+    function refresh() {
+      renderHeader();
+      renderList(document.getElementById("search-box").value || "");
+    }
+
+    refresh();
     document.getElementById("search-box").addEventListener("input", (e) => renderList(e.target.value));
+    sortSelect.addEventListener("change", (e) => {
+      state.browseSort = e.target.value;
+      renderList(document.getElementById("search-box").value);
+    });
+    document.querySelectorAll(".col-cb").forEach((cb) => {
+      cb.addEventListener("change", (e) => {
+        state.browseCols[e.target.dataset.col] = e.target.checked;
+        refresh();
+      });
+    });
   }
 
   function renderBreakdown(card) {
@@ -502,6 +622,15 @@
     div.textContent = str;
     return div.innerHTML;
   }
+
+  // Generic tap feedback on any button press. Grade/option buttons are
+  // skipped since gradeCard() already plays a more meaningful contextual
+  // correct/wrong sound for those.
+  app.addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (!btn || btn.classList.contains("grade") || btn.classList.contains("option-btn")) return;
+    playTap();
+  });
 
   document.addEventListener("keydown", (e) => {
     if (e.key !== " " && e.key !== "ArrowRight") return;

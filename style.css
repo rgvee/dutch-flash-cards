@@ -285,9 +285,63 @@ button {
 
 .profile-btn { width: 100%; }
 
+.browse-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin: 10px 0;
+}
+
+.col-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.hide-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.word-table {
+  overflow-x: auto;
+  margin-top: 4px;
+}
+
+.word-table-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.word-table-header .w-nl,
+.word-table-header .w-en,
+.word-table-header .w-breakdown,
+.word-table-header .w-sentence,
+.word-table-header .w-meaning {
+  min-width: 140px;
+  flex: 1;
+}
+
+.word-table-header span:first-child {
+  width: 8px;
+  flex: 0 0 8px;
+}
+
 .word-list {
   overflow-y: auto;
-  margin-top: 12px;
+  margin-top: 0;
 }
 
 .word-row {
@@ -313,10 +367,20 @@ button {
 
 .w-nl {
   font-weight: 600;
-  min-width: 40%;
+  min-width: 140px;
+  flex: 1;
 }
 
-.w-en {
+.w-en,
+.w-breakdown,
+.w-sentence,
+.w-meaning {
   color: var(--muted);
   font-size: 0.9rem;
+  min-width: 140px;
+  flex: 1;
+}
+
+.w-breakdown {
+  font-style: italic;
 }
