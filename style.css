@@ -308,6 +308,33 @@ button {
   white-space: nowrap;
 }
 
+.kbd-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  display: none;
+}
+
+.kbd-hint kbd {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: inherit;
+  font-size: 0.78rem;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .kbd-hint { display: inline; }
+}
+
+.browse-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+  padding-top: env(safe-area-inset-top);
+}
+
 .word-table {
   overflow-x: auto;
   margin-top: 4px;

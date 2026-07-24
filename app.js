@@ -519,27 +519,30 @@
 
     app.innerHTML = `
       <div class="screen browse">
-        <div class="topbar">
-          <button class="link" id="home-btn">← Home</button>
-          <span class="remaining" id="word-count"></span>
-        </div>
-        <input type="search" id="search-box" placeholder="Search Dutch or English...">
-        <div class="browse-controls">
-          <select id="sort-select">
-            <option value="alpha">Sort: A–Z</option>
-            <option value="default">Sort: Default order</option>
-          </select>
-          <div class="col-toggles">
-            ${BROWSE_COLUMNS.map(
-              (col) => `<label class="hide-toggle">
-                <input type="checkbox" class="col-cb" data-col="${col.key}">
-                ${col.label}
-              </label>`
-            ).join("")}
+        <div class="browse-sticky">
+          <div class="topbar">
+            <button class="link" id="home-btn">← Home</button>
+            <span class="remaining" id="word-count"></span>
           </div>
+          <input type="search" id="search-box" placeholder="Search Dutch or English...">
+          <div class="browse-controls">
+            <select id="sort-select">
+              <option value="alpha">Sort: A–Z</option>
+              <option value="default">Sort: Default order</option>
+            </select>
+            <div class="col-toggles">
+              ${BROWSE_COLUMNS.map(
+                (col) => `<label class="hide-toggle">
+                  <input type="checkbox" class="col-cb" data-col="${col.key}">
+                  ${col.label}
+                </label>`
+              ).join("")}
+            </div>
+            <span class="kbd-hint">Press <kbd>A</kbd> to toggle answers</span>
+          </div>
+          <div class="word-table-header" id="word-table-header"></div>
         </div>
         <div class="word-table">
-          <div class="word-table-header" id="word-table-header"></div>
           <div id="word-list"></div>
         </div>
       </div>
@@ -633,12 +636,24 @@
   });
 
   document.addEventListener("keydown", (e) => {
-    if (e.key !== " " && e.key !== "ArrowRight") return;
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
-    const nextBtn = document.getElementById("next-btn");
-    if (nextBtn) {
-      e.preventDefault();
-      nextBtn.click();
+
+    if (e.key === " " || e.key === "ArrowRight") {
+      const nextBtn = document.getElementById("next-btn");
+      if (nextBtn) {
+        e.preventDefault();
+        nextBtn.click();
+      }
+      return;
+    }
+
+    if (e.key.toLowerCase() === "a") {
+      const enCb = document.querySelector('.col-cb[data-col="en"]');
+      if (enCb) {
+        e.preventDefault();
+        enCb.checked = !enCb.checked;
+        enCb.dispatchEvent(new Event("change"));
+      }
     }
   });
 
