@@ -538,7 +538,7 @@
                 </label>`
               ).join("")}
             </div>
-            <span class="kbd-hint">Press <kbd>A</kbd> to toggle answers</span>
+            <span class="kbd-hint">Press <kbd>A</kbd> English · <kbd>B</kbd> breakdown · <kbd>S</kbd> sentence · <kbd>M</kbd> meaning</span>
           </div>
           <div class="word-table-header" id="word-table-header"></div>
         </div>
@@ -570,7 +570,7 @@
     function renderHeader() {
       const cols = visibleColumns();
       headerEl.innerHTML =
-        `<span></span><span class="w-nl">Dutch</span>` +
+        `<span class="row-index"></span><span class="dot-spacer"></span><span class="w-nl">Dutch</span>` +
         cols.map((col) => `<span class="${col.cls}">${col.label}</span>`).join("");
     }
 
@@ -583,11 +583,12 @@
       countEl.textContent = `${filtered.length} words`;
       const cols = visibleColumns();
       listEl.innerHTML = filtered
-        .map((c) => {
+        .map((c, i) => {
           const p = state.progress[c.id];
           const statusClass = p.state === "new" ? "new" : p.state === "learning" ? "learning" : p.box >= MASTER_BOX ? "mastered" : "review";
           const cells = cols.map((col) => `<span class="${col.cls}">${escapeHtml(col.get(c))}</span>`).join("");
           return `<div class="word-row">
+            <span class="row-index">${i + 1}</span>
             <span class="dot ${statusClass}"></span>
             <span class="w-nl">${escapeHtml(c.nl)}</span>
             ${cells}
@@ -647,12 +648,13 @@
       return;
     }
 
-    if (e.key.toLowerCase() === "a") {
-      const enCb = document.querySelector('.col-cb[data-col="en"]');
-      if (enCb) {
+    const colKey = { a: "en", b: "breakdown", s: "sentence", m: "meaning" }[e.key.toLowerCase()];
+    if (colKey) {
+      const cb = document.querySelector(`.col-cb[data-col="${colKey}"]`);
+      if (cb) {
         e.preventDefault();
-        enCb.checked = !enCb.checked;
-        enCb.dispatchEvent(new Event("change"));
+        cb.checked = !cb.checked;
+        cb.dispatchEvent(new Event("change"));
       }
     }
   });

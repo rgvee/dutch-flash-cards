@@ -361,7 +361,7 @@ button {
   flex: 1;
 }
 
-.word-table-header span:first-child {
+.word-table-header .dot-spacer {
   width: 8px;
   flex: 0 0 8px;
 }
@@ -385,6 +385,15 @@ button {
   border-radius: 50%;
   flex-shrink: 0;
   background: var(--muted);
+}
+
+.row-index {
+  width: 22px;
+  flex: 0 0 22px;
+  color: var(--muted);
+  opacity: 0.6;
+  font-size: 0.78rem;
+  text-align: right;
 }
 
 .dot.new { background: var(--muted); }
