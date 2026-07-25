@@ -93,9 +93,21 @@
     screen: "picker",
     currentMode: null,
     newIntroducedThisSession: 0,
-    reviewOnly: false,
+    freeReview: false,
     sessionStats: { correct: 0, wrong: 0, graduated: 0 },
   };
+
+  // In-place Fisher-Yates shuffle of a copy of `arr`.
+  function shuffleCopy(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = a[i];
+      a[i] = a[j];
+      a[j] = tmp;
+    }
+    return a;
+  }
 
   function selectProfile(name) {
     state.profile = name;
@@ -129,6 +141,21 @@
   }
 
   function gradeCard(cardId, grade) {
+    // Free review quizzes every word regardless of its real scheduler state
+    // (including ones never formally "introduced"), so grading here must not
+    // mutate spaced-repetition progress — it only drives session stats and,
+    // on a miss, brings the word back around sooner within this session.
+    if (state.freeReview) {
+      if (grade === "right") {
+        playCorrect();
+        state.sessionStats.correct += 1;
+      } else {
+        playWrong();
+        state.sessionStats.wrong += 1;
+        requeueCard(CARDS[cardId]);
+      }
+      return;
+    }
     const before = state.progress[cardId];
     const wasLearning = before.state === "learning";
     const after = Scheduler.gradeCard(before, grade, Date.now());
@@ -146,10 +173,17 @@
 
   function buildQueue() {
     return Scheduler.buildQueue(CARDS, state.progress, {
-      newPerSession: state.reviewOnly ? 0 : state.settings.newPerSession,
+      newPerSession: state.settings.newPerSession,
       newIntroducedThisSession: state.newIntroducedThisSession,
       now: Date.now(),
     });
+  }
+
+  // Free review ignores due dates and progress state entirely — every word
+  // in the deck is always eligible, shuffled fresh each time the queue runs
+  // dry, so the session can run forever in random order.
+  function buildFreeReviewQueue() {
+    return shuffleCopy(CARDS);
   }
 
   function stats() {
@@ -221,7 +255,7 @@
         </div>
 
         <button class="primary big" id="study-btn">${s.due + Math.min(s.n, state.settings.newPerSession) > 0 ? "Study (" + (s.due + Math.min(s.n, state.settings.newPerSession)) + ")" : "Nothing due right now"}</button>
-        <button class="secondary" id="review-btn" ${s.due > 0 ? "" : "disabled"}>${s.due > 0 ? "Review only (" + s.due + ")" : "Nothing due for review"}</button>
+        <button class="secondary" id="review-btn">Review all words (${s.total}) · random</button>
         <button class="secondary" id="browse-btn">Browse all words</button>
         <button class="link danger" id="reset-btn">Reset all progress</button>
       </div>
@@ -244,8 +278,8 @@
       saveSettings();
       render();
     });
-    document.getElementById("study-btn").addEventListener("click", () => startStudy(false));
-    document.getElementById("review-btn").addEventListener("click", () => startStudy(true));
+    document.getElementById("study-btn").addEventListener("click", () => startStudy());
+    document.getElementById("review-btn").addEventListener("click", startFreeReview);
     document.getElementById("browse-btn").addEventListener("click", () => {
       state.screen = "browse";
       render();
@@ -260,11 +294,20 @@
     });
   }
 
-  function startStudy(reviewOnly) {
-    state.reviewOnly = !!reviewOnly;
+  function startStudy() {
+    state.freeReview = false;
     state.newIntroducedThisSession = 0;
     state.sessionStats = { correct: 0, wrong: 0, graduated: 0 };
     state.queue = buildQueue();
+    state.screen = "study";
+    nextCard();
+  }
+
+  function startFreeReview() {
+    state.freeReview = true;
+    state.newIntroducedThisSession = 0;
+    state.sessionStats = { correct: 0, wrong: 0, graduated: 0 };
+    state.queue = buildFreeReviewQueue();
     state.screen = "study";
     nextCard();
   }
@@ -275,13 +318,14 @@
   // candidate before allowing a repeat, only giving in when the scheduler
   // confirms there's truly nothing else due.
   function pickNextDistinctFront(prevId) {
+    const rebuild = state.freeReview ? buildFreeReviewQueue : buildQueue;
     if (state.queue.length === 0) {
-      state.queue = buildQueue();
+      state.queue = rebuild();
     }
     if (prevId === null) return;
     let idx = state.queue.findIndex((c) => c.id !== prevId);
     if (idx === -1) {
-      const rebuilt = buildQueue();
+      const rebuilt = rebuild();
       const altIdx = rebuilt.findIndex((c) => c.id !== prevId);
       if (altIdx !== -1) {
         state.queue = rebuilt;
@@ -302,10 +346,16 @@
     state.optionsChoices = null;
     state.answeredOption = null;
     if (state.current !== null) {
-      const p = state.progress[state.current.id];
-      state.currentMode = Scheduler.roundMode(p);
-      if (state.currentMode === "options") {
-        state.optionsChoices = Scheduler.buildOptionsChoices(CARDS, state.current, 4);
+      if (state.freeReview) {
+        // Free review always shows blind recall — no "new" intro, no
+        // multiple-choice — regardless of the card's real scheduler state.
+        state.currentMode = "review";
+      } else {
+        const p = state.progress[state.current.id];
+        state.currentMode = Scheduler.roundMode(p);
+        if (state.currentMode === "options") {
+          state.optionsChoices = Scheduler.buildOptionsChoices(CARDS, state.current, 4);
+        }
       }
     } else {
       state.currentMode = null;
@@ -317,6 +367,23 @@
     state.screen = "study";
     state.current = null;
     render();
+  }
+
+  // Free review has no natural end (the queue reshuffles forever), so its
+  // Home button exits straight to Home instead of the "session summary"
+  // screen, which talks about graduating words and due reviews that don't
+  // apply here.
+  function exitStudy() {
+    if (state.freeReview) {
+      state.freeReview = false;
+      goHome();
+    } else {
+      endSession();
+    }
+  }
+
+  function remainingLabel(remaining) {
+    return state.freeReview ? "Random review" : `${remaining} left`;
   }
 
   function renderSummary() {
@@ -369,7 +436,7 @@
         <div class="screen study">
           <div class="topbar">
             <button class="link" id="home-btn">← Home</button>
-            <span class="remaining">${remaining} left${state.reviewOnly ? " · Review" : ""}</span>
+            <span class="remaining">${remainingLabel(remaining)}</span>
           </div>
           <div class="card new-card">
             <div class="badge">New word</div>
@@ -384,7 +451,7 @@
           <button class="primary big" id="next-btn">Next</button>
         </div>
       `;
-      document.getElementById("home-btn").addEventListener("click", endSession);
+      document.getElementById("home-btn").addEventListener("click", exitStudy);
       document.getElementById("next-btn").addEventListener("click", () => {
         introduceCard(card.id);
         nextCard();
@@ -398,13 +465,13 @@
     }
 
     // mode is 'learning' or 'review' — blind recall
-    const badgeLabel = mode === "learning" ? "Learning" : "Review · box " + p.box;
+    const badgeLabel = state.freeReview ? "Review · random" : mode === "learning" ? "Learning" : "Review · box " + p.box;
     if (!state.revealed) {
       app.innerHTML = `
         <div class="screen study">
           <div class="topbar">
             <button class="link" id="home-btn">← Home</button>
-            <span class="remaining">${remaining} left${state.reviewOnly ? " · Review" : ""}</span>
+            <span class="remaining">${remainingLabel(remaining)}</span>
           </div>
           <div class="card quiz-card">
             <div class="badge ${mode}">${badgeLabel}</div>
@@ -414,7 +481,7 @@
           <button class="primary big" id="show-btn">Show answer</button>
         </div>
       `;
-      document.getElementById("home-btn").addEventListener("click", endSession);
+      document.getElementById("home-btn").addEventListener("click", exitStudy);
       document.getElementById("show-btn").addEventListener("click", () => {
         state.revealed = true;
         render();
@@ -424,7 +491,7 @@
         <div class="screen study">
           <div class="topbar">
             <button class="link" id="home-btn">← Home</button>
-            <span class="remaining">${remaining} left${state.reviewOnly ? " · Review" : ""}</span>
+            <span class="remaining">${remainingLabel(remaining)}</span>
           </div>
           <div class="card quiz-card revealed">
             <div class="badge ${mode}">${badgeLabel}</div>
@@ -442,7 +509,7 @@
           </div>
         </div>
       `;
-      document.getElementById("home-btn").addEventListener("click", endSession);
+      document.getElementById("home-btn").addEventListener("click", exitStudy);
       document.getElementById("wrong-btn").addEventListener("click", () => {
         gradeCard(card.id, "wrong");
         nextCard();
@@ -460,7 +527,7 @@
       <div class="screen study">
         <div class="topbar">
           <button class="link" id="home-btn">← Home</button>
-          <span class="remaining">${remaining} left${state.reviewOnly ? " · Review" : ""}</span>
+          <span class="remaining">${remainingLabel(remaining)}</span>
         </div>
         <div class="card quiz-card">
           <div class="badge options">Pick the meaning</div>
@@ -482,7 +549,7 @@
         ${answered ? '<button class="primary big" id="next-btn">Next</button>' : ""}
       </div>
     `;
-    document.getElementById("home-btn").addEventListener("click", endSession);
+    document.getElementById("home-btn").addEventListener("click", exitStudy);
 
     if (!answered) {
       app.querySelectorAll(".option-btn").forEach((btn) => {
