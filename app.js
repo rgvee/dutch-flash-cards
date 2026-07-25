@@ -505,6 +505,7 @@
   }
 
   const TOPIC_GROUPS = [
+    { key: "pronouns", label: "Pronouns & Basics" },
     { key: "time", label: "Time & Frequency" },
     { key: "numbers", label: "Numbers & Quantity" },
     { key: "bureaucracy", label: "Housing, Municipal & Bureaucracy" },
@@ -658,6 +659,13 @@
     "overzicht/schema": "misc", "mogen": "misc", "overslaan": "misc",
     "uitzoeken": "misc", "opgeven": "misc", "moeten": "misc", "vertellen": "connectors",
     "informatie": "connectors", "basis": "work", "werktijden": "time",
+    // Pronouns & Basics
+    "ik": "pronouns", "jij / je": "pronouns", "hij": "pronouns", "zij / ze": "pronouns",
+    "wij / we": "pronouns", "jullie": "pronouns", "u": "pronouns", "mijn": "pronouns",
+    "jouw": "pronouns", "zijn": "pronouns",
+    "hebben": "misc", "doen": "misc", "gaan": "misc", "komen": "misc",
+    "en": "connectors", "dus": "connectors", "ook": "connectors", "dan": "connectors",
+    "als": "connectors", "met": "connectors", "wat": "connectors",
   };
 
   function getTopic(card) {
