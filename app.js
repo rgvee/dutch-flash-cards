@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  const PROFILES = ["Ram", "Rudrakshi"];
+  const PROFILES = ["Ram/Rudrakshi", "Mayuri"];
   const MASTER_BOX = Scheduler.MASTER_BOX;
 
   const CARDS = Scheduler.buildCards(RAW_CARDS);
@@ -14,6 +14,46 @@
   function settingsKey(profile) {
     return `dutch-fc-settings-v1:${profile}`;
   }
+
+  // One-time migration: "Ram" and "Rudrakshi" used to be separate profiles
+  // sharing the same deck; they're now merged into a single "Ram/Rudrakshi"
+  // profile. For each card, keep whichever of the two had made more
+  // progress, so the merge never regresses either person's studying.
+  // Idempotent (bails out once the merged profile has its own data) and
+  // leaves the old "Ram"/"Rudrakshi" keys untouched as a backup.
+  function progressRank(p) {
+    if (!p) return -1;
+    if (p.state === "new") return 0;
+    if (p.state === "learning") return 1;
+    return 2 + (p.box || 0);
+  }
+  function moreAdvanced(a, b) {
+    if (!a) return b;
+    if (!b) return a;
+    return progressRank(b) > progressRank(a) ? b : a;
+  }
+  function migrateMergedProfile() {
+    const mergedName = "Ram/Rudrakshi";
+    if (localStorage.getItem(progressKey(mergedName))) return;
+    const ramRaw = localStorage.getItem(progressKey("Ram"));
+    const rudRaw = localStorage.getItem(progressKey("Rudrakshi"));
+    if (!ramRaw && !rudRaw) return;
+    let ramProgress = {}, rudProgress = {};
+    try { ramProgress = ramRaw ? JSON.parse(ramRaw) : {}; } catch (e) {}
+    try { rudProgress = rudRaw ? JSON.parse(rudRaw) : {}; } catch (e) {}
+    const merged = {};
+    CARDS.forEach((c) => {
+      merged[c.id] = moreAdvanced(ramProgress[c.id], rudProgress[c.id]) || Scheduler.freshProgress(c.id);
+    });
+    localStorage.setItem(progressKey(mergedName), JSON.stringify(merged));
+
+    const ramSettings = localStorage.getItem(settingsKey("Ram"));
+    const rudSettings = localStorage.getItem(settingsKey("Rudrakshi"));
+    if (ramSettings || rudSettings) {
+      localStorage.setItem(settingsKey(mergedName), ramSettings || rudSettings);
+    }
+  }
+  migrateMergedProfile();
 
   function loadProgress(profile) {
     let stored = {};
